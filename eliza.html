@@ -2735,6 +2735,16 @@ Type *help and press the Enter key to see a list of commands.
     writeText(join(s.helloMessage));
     writeText('');
 
+    document.onkeydown = function(evt) {
+        evt = evt || window.event;
+        if (evt.keyCode == 27) {
+            if (cacmIndex >= 0) {
+                cacmIndex = -1;
+                writeText('&lt;CACM conversation terminated&gt;');
+            }
+        }
+    };
+
     divConsole.addEventListener('keypress', ({ key }) => {
         if (key === 'Enter') {
 
@@ -2804,8 +2814,9 @@ Type *help and press the Enter key to see a list of commands.
         const command = parts[0].toUpperCase();
 
         if (command == "*CACM") {
-            writeText("replaying conversation from Weizenbaum's January 1966 CACM paper");
-            writeText("hit enter to see each exchange (use *traceauto to see the trace)");
+            writeText("Replaying conversation from Weizenbaum's January 1966 CACM paper.");
+            writeText("Press Enter to see each exchange. Press Escape to exit replay mode.");
+            writeText("(Use * or *traceauto to see trace, ** to see transformation rules.)");
             cacmIndex = 0;
         }
         else if (command == "*AMBER") {
@@ -2914,7 +2925,7 @@ commands are:
     function textBlur(on) {
         const c = document.getElementById("console");
         if (on) {
-            const style = '0 0 2px ' + c.style.color;
+            const style = '0 0 3px ' + c.style.color;
             c.style.textShadow = style;
             document.getElementById("log").style.textShadow = style;
             document.body.style.textShadow = style;
@@ -2930,6 +2941,7 @@ commands are:
         const c = document.getElementById("console");
         c.style.color = textColour;
         c.style.backgroundColor = bgColour;
+        c.style.caretColor = textColour;
         const l = document.getElementById("log");
         l.style.color = textColour;
         l.style.backgroundColor = bgColour;
@@ -2950,23 +2962,24 @@ commands are:
     }
 
     #console {
-        border: none;
         outline: none;
+        border: none;
         width: 95vW;
         color: limegreen;
         background: transparent;
         font-size: 2.6vh;
         font-family: monospace;
-        border: none;
         position: relative;
         bottom: 2.7vh;
         margin-left: -0.1vw;
-        text-shadow: 0 0 2px #00ff00;
+        text-shadow: 0 0 3px #00ff00;
+        caret-color: limegreen;
+        caret-shape: block;
     }
 
     body {
         background-color: #020;
-        text-shadow: 0 0 2px #00ff00;
+        text-shadow: 0 0 3px #00ff00;
         margin-left: 2vw;
     }
 </style>
