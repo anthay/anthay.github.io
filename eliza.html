@@ -24,6 +24,12 @@
     There is lots more about ELIZA at elizagen.org
 */
 
+const VERSION = '0.70';
+/*
+    0.70 Anthony Hay        2023-11-16  Add *reset and *version
+    0.00 Ant & Max Hay      2023-10-31  Initial version
+*/
+
 
 //////// //       //// ////////    ///    //        ///////   //////   ////  //////  
 //       //        //       //    // //   //       //     // //    //   //  //    // 
@@ -1264,6 +1270,165 @@ function scriptToString(s) {
     txt += s.memoryRule.toString();
     return txt;
 }
+
+
+class Token {
+    constructor(t = 'eof', value = '') {
+        this.t = t;
+        this.value = value;
+    }
+    isSymbol(v) {
+        if (v) {
+            return this.t === 'symbol' && this.value === v;
+        }
+        return this.t === 'symbol';
+    }
+    isNumber() {
+        return this.t === 'number';
+    }
+    isOpen() {
+        return this.t === 'open_bracket';
+    }
+    isClose() {
+        return this.t === 'close_bracket';
+    }
+    isEof() {
+        return this.t === 'eof';
+    }
+    equals(rhs) {
+        return this.t === rhs.t && this.value === rhs.value;
+    }
+}
+
+class Tokenizer {
+    constructor(scriptText) {
+        this.scriptText = scriptText;
+        this.script = new Script;
+        this.t = new Token();
+        this.got_token = false;
+        this.buf = [];
+        this.bufptr = 0;
+        this.line_number = 1;
+    }
+    peektok() {
+        if (this.got_token) {
+            return this.t;
+        }
+        this.got_token = true;
+        return this.t = this.readtok();
+    }
+    nexttok() {
+        if (this.got_token) {
+            this.got_token = false;
+            return this.t;
+        }
+        return this.readtok();
+    }
+    readtok() {
+        let ch = '';
+        for (;;) {
+            do { // skip whitespace
+                if (this.eof())
+                    return new Token('eof');
+                ch = this.nextch();
+                if (this.is_newline(ch))
+                    this.consume_newline(ch);
+            } while (this.is_whitespace(ch));
+            if (ch != ';')
+                break;
+            do { // skip comment
+                if (this.eof())
+                    return new Token('eof');
+                ch = this.nextch();
+            } while (!this.is_newline(ch));
+            this.consume_newline(ch);
+        }
+
+        if (ch == '(')
+            return new Token('open_bracket');
+
+        if (ch == ')')
+            return new Token('close_bracket');
+
+        if (this.is_digit(ch)) {
+            let t = new Token('number');
+            t.value += ch;
+            while (!this.eof()) {
+                ch = this.peekch();
+                if (!this.is_digit(ch)) {
+                    break;
+                }
+                t.value += ch;
+                this.nextch();
+            }
+            return t;
+        }
+
+        // anything else is a symbol
+        let t = new Token('symbol');
+        t.value += ch;
+        while (!this.eof()) {
+            ch = this.peekch();
+            if (this.non_symbol(ch)) {
+                break;
+            }
+            t.value += ch;
+            ch = this.nextch();
+        }
+        return t;
+    }
+    eof() {
+        return this.bufptr === this.scriptText.length;
+    }
+    nextch() {
+        console.assert(!this.eof());
+        return this.scriptText[this.bufptr++];
+    }
+    peekch() {
+        console.assert(!this.eof());
+        return this.scriptText[this.bufptr];
+    }
+    is_whitespace(ch) {
+        return ch <= ' ' || ch == '\x7F';
+        // this must hold: is_newline(ch) implies is_whitespace(ch)
+    }
+    is_newline(ch) {
+        return ch === '\x0A'     // LF
+            || ch === '\x0B'     // VT
+            || ch === '\x0C'     // FF
+            || ch === '\x0D';    // CR
+    }
+    consume_newline(ch) {
+        if (ch === '\x0D' && !this.eof() && this.peekch(ch) === '\x0A') {
+            this.nextch(ch); // CR/LF is one line ending
+        }
+        this.line_number++;
+    }
+    is_digit(ch) {
+        return ch.length == 1 && ch >= '0' && ch <= '9';
+    }
+    non_symbol(ch) {
+        return ch === '(' || ch === ')' || ch === ';' || this.is_whitespace(ch);
+    }
+}
+
+
+
+
+
+
+
+
+function testReadScript() {
+    // const tokenizer = new Tokenizer(CACM_1966_01_DOCTOR_SCRIPT);
+    // for (let t = tokenizer.nexttok(); !t.isEof(); t = tokenizer.nexttok()) {
+        // console.log(t.t + " '" + t.value + "'");
+    // }
+}
+
+
+
+
 
 
 function readScript() {
@@ -2691,6 +2856,7 @@ function elizaTest() {
     testHash();
     testLastChunkAsBcd();
     testScript();
+    testReadScript();
 }
 
 
@@ -2704,10 +2870,6 @@ function elizaTest() {
 //    // //     // //   /// //    // //     // //       //       
  //////   ///////  //    //  //////   ///////  //////// //////// 
 
-
-const s = readScript();
-const tracer = new Tracer;
-const eliza = new Eliza(s.rules, s.memoryRule, tracer);
 
 window.addEventListener('load', () => {
     const divConsole = document.getElementById('console');
@@ -2726,14 +2888,18 @@ Type *help and press the Enter key to see a list of commands.
 
     elizaTest();
 
-    let conversation = join(s.helloMessage) + "\n\n";
-    let traceText = conversation;
+    let s = readScript();
+    let tracer = new Tracer;
+    let eliza = new Eliza(s.rules, s.memoryRule, tracer);
+
     let traceAuto = false;
     let cacmIndex = -1;
     crt = true;
 
     writeText(join(s.helloMessage));
     writeText('');
+    let conversation = join(s.helloMessage) + '\n\n';
+    let traceText = conversation;
 
     document.onkeydown = function(evt) {
         evt = evt || window.event;
@@ -2751,12 +2917,14 @@ Type *help and press the Enter key to see a list of commands.
             let input = divConsole.value;
             writeText(input);
 
-            if (input.length && input[0] === '*') {
-                handleCommand(input);
-                keyHandlingComplete();
-                return;
+            if (input.length) {
+                if (input[0] === '*') {
+                    handleCommand(input);
+                    keyHandlingComplete();
+                    return;
+                }
             }
-            else if (input.length === 0) {
+            else {
                 if (cacmIndex >= 0) {
                     input = CACM_1966_CONVERSATION[cacmIndex];
                     cacmIndex += 2;
@@ -2865,6 +3033,19 @@ Type *help and press the Enter key to see a list of commands.
             traceAuto = false;
             writeText("tracing enabled");
         }
+        else if (command === "*VERSION") {
+            writeText(VERSION);
+        }
+        else if (command === "*RESET") {
+            traceAuto = false;
+            cacmIndex = -1;
+            s = readScript();
+            tracer = new Tracer;
+            eliza = new Eliza(s.rules, s.memoryRule, tracer);
+            writeText('<br/>' + join(s.helloMessage) + '<br/>');
+            conversation = join(s.helloMessage) + '\n\n';
+            traceText = conversation;
+        }
         else if (command === "*HELP") {
             writeText(`<pre>
 ELIZA is configured with Joseph Weizenbaum's 1966 DOCTOR script.
@@ -2883,8 +3064,9 @@ commands are:
 
 *amber     - change display colour; also *black, *green, *white
 *cacm      - replay conversation from Weizenbaum's 1966 CACM paper
-*crt       - toggle CRT text-blur on and off
+*crt       - toggle "Cathode-Ray Tube" text-blur on and off
 *help      - show this list of commands
+*reset     - reset ELIZA and clear conversation and trace log
 *save      - save current conversation to a text file
 *savedr    - save Weizenbaum's 1966 DOCTOR script to a text file
 *savetrace - save current conversation and trace to a text file
@@ -2892,10 +3074,11 @@ commands are:
 **         - show the transformation rules used in the most recent reply
 *traceauto - turn on tracing; trace shown after every exchange
 *traceon   - turn on tracing; enter '*' after an exchange to see trace
+*version   - show version number of this implementation
 </pre>`);
         }
         else {
-            writeText("unknown command - type *help to see commands");
+            writeText("Unknown command - type *help to see commands");
         }
     }
     function filterHtml(s) {
@@ -2907,8 +3090,6 @@ commands are:
     function save(name) {
         const filename = `${name.length ? name : 'text-engine-save'}.txt`;
         saveFile("hello\nworld\nmary had a", filename);
-        //localStorage.setItem(name, JSON.stringify("inputs"));
-        //const line = name.length ? `Game saved as "${name}".` : `Game saved.`;
     };
 
     function saveFile(content, filename) {
