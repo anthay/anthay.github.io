@@ -24,8 +24,9 @@
     There is lots more about ELIZA at elizagen.org
 */
 
-const VERSION = '0.90';
+const VERSION = '0.91';
 /*
+    0.91 Anthony Hay        2023-11-21  Add *fontsize
     0.90 Anthony Hay        2023-11-17  Add *load, *tracepre, *maxtran, *clear
     0.00 Ant & Max Hay      2023-10-31  Initial version
 */
@@ -2946,6 +2947,20 @@ Type *help and press the Enter key to see a list of commands.
             crt = !crt;
             textBlur(crt);
         }
+        else if (command === "*FONTSIZE") {
+            if (parts.length === 2) {
+                const n = parseInt(parts[1]);
+                if (n === NaN || n < 1) {
+                    writeText("missing or invalid number; e.g. '*fontsize 24' sets 24 pixel font");
+                }
+                else {
+                    fontSize(n);
+                }
+            }
+            else {
+                writeText("missing number; e.g. '*fontsize 24' sets 24 pixel font");
+            }
+        }
         else if (command === "*SAVE") {
             writeText("saving conversation to 'conversation.txt'");
             saveFile(conversation, "conversation.txt");
@@ -3061,7 +3076,9 @@ Type about your feelings and thoughts; make the sort of statements
 you might make to a psychiatrist in an initial psychiatric
 interview. When you wish a reply to what you have said, press
 the Enter button. The reply you receive will be exactly the
-same as the original 1966 ELIZA/DOCTOR would have made.
+same as the original 1966 ELIZA/DOCTOR would have made. (Your
+conversation is private to your machine; nothing you say is
+transmitted anywhere else.)
 
 Commands have been added to this implementation that were not part
 of the original ELIZA. All of these commands begin with an asterisk.
@@ -3070,28 +3087,29 @@ referred to shows how ELIZA produced its reply and is best
 understood in conjunction with Weizenbaum's 1966 CACM paper.
 The commands are:
 
-*amber     - change display colour; also *black, *green, *white
-*cacm      - replay conversation from Weizenbaum's 1966 CACM paper
-*clear     - clear screen and conversation and trace logs
-*crt       - toggle "Cathode-Ray Tube" text-blur on and off
-*help      - show this list of commands
-*load      - load a Weizenbaum-format script file from disk
-             (you can create an example script file with *savedoc)
-*reset     - reset ELIZA and clear conversation and trace logs
-*save      - save current conversation to a text file
-*savedoc   - save Weizenbaum's 1966 DOCTOR script to a text file
-*savetrace - save current conversation and trace to a text file
-*          - show a trace of the most recent reply
-**         - show the transformation rules used in the most recent reply
-*traceauto - turn on tracing; trace shown after every exchange
-*traceon   - turn on tracing; enter '*' after an exchange to see trace
-*tracepre  - show only input sentence and currently active keyword
-             (for watching the operation of Turing machines)
-*traceoff  - turn off tracing
-*maxtran N - specify the maximum number of transformations (default ${TRANSFORMATION_LIMIT_DEFAULT}),
-             0 means no limit (for limiting Turing machine operation;
-             also the Escape key will interrupt Turing machines)
-*version   - show version number of this implementation
+*amber      - change display colour; also *black, *green, *white
+*cacm       - replay conversation from Weizenbaum's 1966 CACM paper
+*clear      - clear screen and conversation and trace logs
+*crt        - toggle "Cathode-Ray Tube" text-blur on and off
+*fontsize N - set the font size to N pixels
+*help       - show this list of commands
+*load       - load a Weizenbaum-format script file from disk
+              (you can create an example script file with *savedoc)
+*reset      - reset ELIZA and clear conversation and trace logs
+*save       - save current conversation to a text file
+*savedoc    - save Weizenbaum's 1966 DOCTOR script to a text file
+*savetrace  - save current conversation and trace to a text file
+*           - show a trace of the most recent reply
+**          - show the transformation rules used in the most recent reply
+*traceauto  - turn on tracing; trace shown after every exchange
+*traceon    - turn on tracing; enter '*' after an exchange to see trace
+*tracepre   - show only input sentence and currently active keyword
+              (for watching the operation of Turing machines)
+*traceoff   - turn off tracing
+*maxtran N  - specify the maximum number of transformations (default ${TRANSFORMATION_LIMIT_DEFAULT}),
+              0 means no limit (for limiting Turing machine operation;
+              also the Escape key will interrupt Turing machines)
+*version    - show version number of this implementation
 </pre>`);
         }
         else {
@@ -3181,6 +3199,15 @@ The commands are:
         b.style.backgroundColor = bgColour;
     }
 
+    function fontSize(px) {
+        const c = document.getElementById("console");
+        c.style.fontSize = px + 'px';
+        const l = document.getElementById("log");
+        l.style.fontSize = px + 'px';
+        const b = document.body;
+        b.style.fontSize = px + 'px';
+    }
+
 });
 </script>
 
@@ -3190,12 +3217,13 @@ The commands are:
         color: limegreen;
         font-size: 2.6vh;
         background-color: transparent;
+        width: 95vw;
     }
 
     #console {
         outline: none;
         border: none;
-        width: 95vW;
+        width: 95vw;
         color: limegreen;
         background: transparent;
         font-size: 2.6vh;
@@ -3212,6 +3240,9 @@ The commands are:
         background-color: #020;
         text-shadow: 0 0 3px #00ff00;
         margin-left: 2vw;
+        font-size: 2.6vh;
+        font-family: monospace;
+        width: 95vw;
     }
 </style>
 </header>
