@@ -24,8 +24,9 @@
     There is lots more about ELIZA at elizagen.org
 */
 
-const VERSION = '0.91';
+const VERSION = '0.92';
 /*
+    0.92 Anthony Hay        2023-12-06  NEWKEY produces built-in message when keystack empty
     0.91 Anthony Hay        2023-11-21  Add *fontsize
     0.90 Anthony Hay        2023-11-17  Add *load, *tracepre, *maxtran, *clear
     0.00 Ant & Max Hay      2023-10-31  Initial version
@@ -623,6 +624,7 @@ class nullTracer {
     preTransform(keyword, words) {}
     transform(t, s) {}
     decompFailed() {}
+    newkeyFailed() {}
     usingNone(s) {}
     text() {
         return '';
@@ -649,6 +651,7 @@ class preTracer extends nullTracer {
     }
     transform(t, s) {}
     decompFailed() {}
+    newkeyFailed() {}
     usingNone(s) {}
     text() {
         return '';
@@ -712,7 +715,7 @@ class Tracer extends nullTracer {
         this.txt += t;
     }
     usingMemory(s) {
-        this.txt += TRACE_PREFIX + '(response is the oldest unused memory)\n';
+        this.txt += TRACE_PREFIX + 'response is the oldest unused memory\n';
         this.scrip += s;
     }
     transform(t, s) {
@@ -722,8 +725,11 @@ class Tracer extends nullTracer {
     decompFailed() {
         this.txt += TRACE_PREFIX + 'ill-formed script? No decomposition rule matched input\n';
     }
+    newkeyFailed() {
+        this.txt += TRACE_PREFIX + 'keyword stack empty; response is one of the built-in messages\n';
+    }
     usingNone(s) {
-        this.txt += TRACE_PREFIX + '(response is the next remark from the NONE rule)\n';
+        this.txt += TRACE_PREFIX + 'response is the next remark from the NONE rule\n';
         this.scrip += s;
     }
     text() {
@@ -760,7 +766,7 @@ class Eliza {
         this.tracer = tracer;
         this.tags = collectTags(this.rules);
         this.limit = 1; // (this is Weizenbaum's "a certain counting mechanism")
-        this.noMatchMessages = ["PLEASE CONTINUE", "HMMM", "GO ON, PLEASE", "I SEE"];
+        this.noMatchMessages = ["PLEASE CONTINUE", "HMMM", "GO ON , PLEASE", "I SEE"];
         this.transformationLimit = transformationLimit;
     }
 
@@ -860,6 +866,10 @@ class Eliza {
             if (action === ACTION_LINKKEY) {
                 words = response;
                 keystack.unshift(link);
+            }
+            else if (keystack.length === 0) {
+                this.tracer.newkeyFailed();
+                return this.noMatchMessages[this.limit - 1];
             }
         }
 
@@ -1597,6 +1607,8 @@ class ElizaScriptReader {
                         decomposition: this.rdlist(),
                         reassembly: []
                     };
+                    if (trans.decomposition.length == 0)
+                        throw new Error(this.errormsg("decompose pattern cannot be empty"));
                     while (this.tok.peektok().open()) {
                         trans.reassembly.push(this.readReassembly());
                     }
@@ -2855,6 +2867,7 @@ Type *help and press the Enter key to see a list of commands.
 
             let input = divConsole.value;
             writeText(input);
+            writeText('');
 
             if (input.length) {
                 if (input[0] === '*') {
@@ -2867,7 +2880,9 @@ Type *help and press the Enter key to see a list of commands.
                 if (cacmIndex >= 0) {
                     input = CACM_1966_CONVERSATION[cacmIndex];
                     cacmIndex += 2;
-                    writeText(input);
+                    //writeText(input);
+                    divConsole.value = input;
+                    return;
                 }
                 else {
                     keyHandlingComplete();
@@ -3070,22 +3085,27 @@ Type *help and press the Enter key to see a list of commands.
             traceText = conversation;
         }
         else if (command === "*HELP") {
-            writeText(`<pre>
+            writeText(`
 ELIZA is configured with Joseph Weizenbaum's 1966 DOCTOR script.
 Type about your feelings and thoughts; make the sort of statements
 you might make to a psychiatrist in an initial psychiatric
 interview. When you wish a reply to what you have said, press
 the Enter button. The reply you receive will be exactly the
-same as the original 1966 ELIZA/DOCTOR would have made. (Your
-conversation is private to your machine; nothing you say is
-transmitted anywhere else.)
-
+same as the original 1966 ELIZA/DOCTOR would have made.`);
+            writeText('');
+            writeText(`
+(Your conversation is private to your machine; nothing you say is
+transmitted anywhere else.)`);
+            writeText('');
+            writeText(`
 Commands have been added to this implementation that were not part
 of the original ELIZA. All of these commands begin with an asterisk.
 Type the command and then press the Enter button. The 'trace'
 referred to shows how ELIZA produced its reply and is best
 understood in conjunction with Weizenbaum's 1966 CACM paper.
-The commands are:
+The commands are:`);
+
+            writeText(`<pre>
 
 *amber      - change display colour; also *black, *green, *white
 *cacm       - replay conversation from Weizenbaum's 1966 CACM paper
