@@ -463,8 +463,8 @@ class RuleKeyword {
             return [ACTION_NEWKEY];
         }
 
-        if (reassemblyRule.length === 1 && reassemblyRule[0].length > 1 && reassemblyRule[0][0] === '=') {
-            return [ACTION_LINKKEY, words, reassemblyRule[0].substring(1)];
+        if (reassemblyRule.length === 2 && reassemblyRule[0] === '=') {
+            return [ACTION_LINKKEY, words, reassemblyRule[1]];
         }
 
         // is it the special-case reassembly rule '( PRE ( reassembly ) ( =reference ) )'
@@ -477,10 +477,8 @@ class RuleKeyword {
             while (reassemblyRule[i] !== ")") {
                 reassembly.push(reassemblyRule[i++]);
             }
-            i += 2; // skip ')' & '('
+            i += 3; // skip ')', '(' and '='
             let link = reassemblyRule[i];
-            console.assert(link[0] === "=");
-            link = link.substring(1);
             words = reassemble(reassembly, constituents);
             return [ACTION_LINKKEY, words, link];
         }
@@ -680,6 +678,8 @@ class Tracer extends nullTracer {
         this.txt += this.prefix + "no keywords found in subclause: " + join(words) + '\n';
     }
     subclauseComplete(subclause, wordSubstitutions, keystack, rules) {
+        this.txt += this.prefix + "word substitutions made: "
+            + (wordSubstitutions.length === 0 ? '&lt;none&gt;' : wordSubstitutions) + '\n';
         if (keystack.length === 0) {
             if (subclause.length !== 0)
                 this.txt += this.prefix + "no keywords found in subclause: "
@@ -687,8 +687,6 @@ class Tracer extends nullTracer {
         }
         else {
             this.txt += this.prefix + "keyword found in subclause: " + subclause + '\n';
-            this.txt += this.prefix + "word substitutions made: "
-                + (wordSubstitutions.length === 0 ? '&lt;none&gt;' : wordSubstitutions) + '\n';
             this.txt += this.prefix + "keyword stack(precedence):";
             let comma = false;
             for (let keyword of keystack) {
@@ -725,8 +723,8 @@ class Tracer extends nullTracer {
     decompFailed() {
         this.txt += TRACE_PREFIX + 'ill-formed script? No decomposition rule matched input\n';
     }
-    newkeyFailed() {
-        this.txt += TRACE_PREFIX + 'keyword stack empty; response is one of the built-in messages\n';
+    newkeyFailed(responseSource) {
+        this.txt += TRACE_PREFIX + 'keyword stack empty; response is a ' + responseSource + ' message\n';
     }
     usingNone(s) {
         this.txt += TRACE_PREFIX + 'response is the next remark from the NONE rule\n';
@@ -868,8 +866,9 @@ class Eliza {
                 keystack.unshift(link);
             }
             else if (keystack.length === 0) {
-                this.tracer.newkeyFailed();
-                return this.noMatchMessages[this.limit - 1];
+                this.tracer.newkeyFailed('NONE');
+                //return this.noMatchMessages[this.limit - 1]; TBD
+                break;
             }
         }
 
@@ -1431,6 +1430,9 @@ class Tokenizer {
         if (ch == ')')
             return new Token('close_bracket');
 
+        if (ch == '=')
+            return new Token('symbol', '=');
+
         if (this.is_digit(ch)) {
             let t = new Token('number');
             t.value += ch;
@@ -1450,7 +1452,7 @@ class Tokenizer {
         t.value += ch;
         while (!this.eof()) {
             ch = this.peekch();
-            if (this.non_symbol(ch)) {
+            if (this.non_symbol(ch) || ch === '=') {
                 break;
             }
             t.value += ch;
@@ -1556,6 +1558,9 @@ class ElizaScriptReader {
         if (this.script.rules.has(keyword)) {
             throw new Error(this.errormsg(`keyword rule already specified for keyword '${keyword}'`));
         }
+        if (this.tok.peektok().close()) {
+            throw new Error(this.errormsg(`keyword '${keyword}' has no associated body`));
+        }
 
         for (t = this.tok.nexttok(); !t.close(); t = this.tok.nexttok()) {
             if (t.symbol("=")) {
@@ -1583,19 +1588,14 @@ class ElizaScriptReader {
                 }
             } else if (t.open()) {
                 t = this.tok.peektok();
-                if (t.symbol() && t.value.startsWith('=')) {
+                if (t.symbol("=")) {
+                    this.tok.nexttok();
                     t = this.tok.nexttok();
-                    if (t.symbol("=")) {
-                        t = this.tok.nexttok();
-                        if (!t.symbol()) {
-                            throw new Error(this.errormsg("expected equivalence class name"));
-                        }
-                        className = t.value;
-                    } else if (t.symbol() && t.value.startsWith('=')) {
-                        className = t.value.substring(1);
-                    } else {
+                    if (!t.symbol()) {
                         throw new Error(this.errormsg("expected equivalence class name"));
                     }
+                    className = t.value;
+
                     if (!this.tok.nexttok().close()) {
                         throw new Error(this.errormsg("expected ')'"));
                     }
@@ -1645,6 +1645,9 @@ class ElizaScriptReader {
         const pre = ["(", "PRE"];
         const reconstruct = this.rdlist();
         const reference = this.rdlist();
+        if (reference.length !== 2 || reference[0] !== '=') {
+            throw new Error(this.errormsg("expected '(=reference)' in PRE rule"));
+        }
         
         pre.push("(", ...reconstruct, ")");
         pre.push("(", ...reference, ")");
