@@ -98,9 +98,8 @@ function utf32ArrayFromString(s) {
 }
 
 
-// return given string with non-Hollerith characters replaced
-// by Hollerith alternatives, where possible, or '-' otherwise
-function filterBcd(s) {
+// return given string uppercased and with certain punctuation filtered
+function elizaUppercase(s) {
     let result = "";
     const nonBcdReplacementChar = '-';
     const utf32 = utf32ArrayFromString(s);
@@ -125,15 +124,9 @@ function filterBcd(s) {
         default:
             break;
         }
-        if (c32 > 127) {
-            result += nonBcdReplacementChar;
-            continue;
-        }
         const c = String.fromCodePoint(c32).toUpperCase();
         if (c == '?' || c == '!')
             result += '.';
-        else if (!hollerithDefined(c))
-            result += nonBcdReplacementChar;
         else
             result += c;
     }
@@ -361,8 +354,9 @@ function lastChunkAsBcd(s) {
     let result = BigInt(0);
 
     const append = (c) => {
-        console.assert(hollerithDefined(c));
-        result = (result << BigInt(6) | BigInt(hollerithEncoding[c.charCodeAt(0)]));
+        result = result << BigInt(6);
+        if (hollerithDefined(c))
+            result = result | BigInt(hollerithEncoding[c.charCodeAt(0)]);
     };
 
     let count = 0;
@@ -811,7 +805,7 @@ class Eliza {
     // return ELIZA's response to the given input string
     async response(input) {
         console.assert(typeof(input) === "string");
-        let words = split(filterBcd(input));
+        let words = split(elizaUppercase(input));
         this.tracer.beginResponse(words);
 
         this.limit = (this.limit % 4) + 1;
@@ -1904,17 +1898,17 @@ function testEqual() {
 }
 
 
-function testfilterBcd() {
-    console.assert(filterBcd("") === "");
-    console.assert(filterBcd("HELLO") === "HELLO");
-    console.assert(filterBcd("Hello! How are you?") === "HELLO. HOW ARE YOU.");
-    console.assert(filterBcd("Æmilia, Æsop & Phœbë") === "-MILIA, -SOP - PH-B-");
+function testElizaUppercase() {
+    console.assert(elizaUppercase("") === "");
+    console.assert(elizaUppercase("HELLO") === "HELLO");
+    console.assert(elizaUppercase("Hello! How are you?") === "HELLO. HOW ARE YOU.");
+    console.assert(elizaUppercase("Æmilia, æsop & Phœbë") === "ÆMILIA, ÆSOP & PHŒBË");
 
     // 'RIGHT SINGLE QUOTATION MARK' (U+2019)
-    console.assert(filterBcd("I’m depressed") === "I'M DEPRESSED");
+    console.assert(elizaUppercase("I’m depressed") === "I'M DEPRESSED");
 
     const allValidBCD = "0123456789=\'+ABCDEFGHI.)-JKLMNOPQR$* /STUVWXYZ,(";
-    console.assert(filterBcd(allValidBCD) === allValidBCD);
+    console.assert(elizaUppercase(allValidBCD) === allValidBCD);
 }
 
 
@@ -2900,7 +2894,7 @@ const ORIGINAL_1966_CACM_SCRIPT_BUT_REORDERED =
 
 function elizaTest() {
     testEqual();
-    testfilterBcd();
+    testElizaUppercase();
     testSplit();
     testJoin();
     testToInt();
