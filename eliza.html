@@ -24,6 +24,7 @@
 
 
 /*
+    0.97 Anthony Hay        2024-06-25  Be more forgiving of non-Hollerith characters
     0.96 Anthony Hay        2024-06-23  Add script syntax to *savedoc output
     0.95 Anthony Hay        2024-01-14  Add *full; fix font colour bug
     0.94 Max Hay            2024-01-04  Improve console focus gain
@@ -34,7 +35,7 @@
                                         Mark C. Marino & ChatGPT4 for help
                                         with the initial conversion from C++)
 */
-const VERSION = '0.96';
+const VERSION = '0.97';
 
 
 //////// //       //// ////////    ///    //        ///////   //////   ////  //////  
@@ -70,12 +71,12 @@ const hollerithEncoding = (() => {
     return toBcd;
 })();
 
-// Return true iff given c is in the Hollerith character set
-function hollerithDefined(c) {
-    const code = c.charCodeAt(0);
-    if (code >= HOLLERITHENCODING_TABLE_SIZE)
+// Return true iff given u8 is in the Hollerith character set
+function hollerithDefined(u8) {
+    console.assert(typeof(u8) === "number");
+    if (u8 >= HOLLERITHENCODING_TABLE_SIZE)
         return false;
-    return hollerithEncoding[code] !== HOLLERITH_UNDEFINED;
+    return hollerithEncoding[u8] !== HOLLERITH_UNDEFINED;
 }
 
 
@@ -95,6 +96,12 @@ function utf32ArrayFromString(s) {
         }
     }
     return result;
+}
+
+function utf8ArrayFromString(s) {
+    const encoder = new TextEncoder();
+    const utf8Array = encoder.encode(s);
+    return Array.from(utf8Array);
 }
 
 
@@ -120,15 +127,17 @@ function elizaUppercase(s) {
         case 0x2039:        // 'SINGLE LEFT-POINTING ANGLE QUOTATION MARK' (U+2039)
         case 0x203A:        // 'SINGLE RIGHT-POINTING ANGLE QUOTATION MARK' (U+203A)
             result += '\''; //   => 'APOSTROPHE' (U+0027)
-            continue;
+            break;
+
+        case 0x0021:        // 'EXCLAMATION MARK' (U+0021)
+        case 0x003F:        // 'QUESTION MARK' (U+003F)
+            result += '.';  //   => 'FULL STOP' (U+002E)
+            break;
+
         default:
+            result += String.fromCodePoint(c32).toUpperCase();
             break;
         }
-        const c = String.fromCodePoint(c32).toUpperCase();
-        if (c == '?' || c == '!')
-            result += '.';
-        else
-            result += c;
     }
     return result;
 }
@@ -348,26 +357,29 @@ function hash(d, n) {
 }
 
 
-// return the 36-bit Hollerith encoding of the word s, appropriately
+// return the 36-bit Hollerith encoding of the word str, appropriately
 // space padded, or the last chunk of the word if over 6 characters long
-function lastChunkAsBcd(s) {
+function lastChunkAsBcd(str) {
     let result = BigInt(0);
 
-    const append = (c) => {
-        result = result << BigInt(6);
-        if (hollerithDefined(c))
-            result = result | BigInt(hollerithEncoding[c.charCodeAt(0)]);
+    const append = (u8) => {
+        result <<= BigInt(6);
+        if (hollerithDefined(u8))
+            result |= BigInt(hollerithEncoding[u8]);
+        else
+            result |= BigInt(u8) & BigInt(0x3F);
     };
 
     let count = 0;
-    if (s) {
+    if (str) {
+        const s = utf8ArrayFromString(str);
         for (let c of s.slice(Math.floor((s.length - 1) / 6) * 6)) {
             append(c);
             count++;
         }
     }
     while (count++ < 6) {
-        append(' ');
+        append(0x20); // space pad to six characters
     }
 
     return result;
@@ -2193,6 +2205,7 @@ function testLastChunkAsBcd() {
     console.assert(lastChunkAsBcd("ALWAYS")         === BigInt("0o214366217062"));
     console.assert(lastChunkAsBcd("INVENTED")       === BigInt("0o252460606060"));
     console.assert(lastChunkAsBcd("123456ABCDEF")   === BigInt("0o212223242526"));
+    console.assert(lastChunkAsBcd("Ç")              === BigInt("0o030760606060"));
 }
 
 
